@@ -1,0 +1,12 @@
+node_modules/
+dist/
+uploads/
+.env
+.env.local
+*.log
+logs/
+.DS_Store
+*.swp
+*.swo
+*~
+

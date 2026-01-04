@@ -1,0 +1,120 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  persona       String
+  createdAt     DateTime     @default(now())
+  Documents     Document[]
+  Transactions  Transaction[]
+  TaxNotes      TaxNote[]
+  Insights      Insight[]
+  Reports       Report[]
+
+  @@index([email])
+}
+
+model Document {
+  id              String        @id @default(cuid())
+  userId          String
+  type            String
+  sourceUri       String
+  mimeType        String
+  extractionStatus String       @default("pending")
+  extractionProgress Float      @default(0) // 0-100
+  extractedAt     DateTime?
+  provenanceModel String?
+  provenanceVersion String?
+  confidence      Float?
+  createdAt       DateTime      @default(now())
+  User            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Transactions    Transaction[]
+
+  @@index([userId])
+  @@index([extractionStatus])
+  @@index([createdAt])
+}
+
+model Transaction {
+  id          String     @id @default(cuid())
+  userId      String
+  documentId  String?
+  date        DateTime
+  amount      Float
+  currency    String     @default("INR")
+  description String
+  merchant    String?
+  direction   String
+  category    String?
+  subCategory String?
+  isRecurring Boolean    @default(false)
+  labels      String[]
+  confidence  Float?
+  explanation String?
+  User        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Document    Document?  @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([date])
+  @@index([userId, date])
+  @@index([category])
+}
+
+model TaxNote {
+  id                  String   @id @default(cuid())
+  userId              String
+  assessmentYear      String
+  section             String
+  title               String
+  potentialDeduction  Float
+  evidenceTransactionIds String[]
+  explanation         String
+  confidence          Float
+  uncertaintyNote     String?
+  User                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([assessmentYear])
+}
+
+model Insight {
+  id          String   @id @default(cuid())
+  userId      String
+  period      String
+  type        String
+  summary     String
+  eli5        String?
+  data        Json?
+  explanation String?
+  confidence  Float?
+  User        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([period])
+  @@index([type])
+}
+
+model Report {
+  id         String   @id @default(cuid())
+  userId     String
+  month      String
+  totals     Json
+  highlights String[]
+  charts     String[]
+  insightIds String[]
+  taxNoteIds String[]
+  generatedAt DateTime @default(now())
+  User       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month])
+  @@index([userId])
+  @@index([month])
+}
+
