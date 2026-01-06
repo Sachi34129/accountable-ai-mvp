@@ -57,8 +57,24 @@ async function ensureModelLoaded(model: string): Promise<void> {
 
 async function callOllama(request: OllamaChatRequest, retries = 3): Promise<string> {
   try {
-    // Verify Ollama is accessible
-    const healthCheck = await fetch(`${OLLAMA_BASE_URL}/api/tags`).catch(() => null);
+    // Verify Ollama is accessible with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+    
+    let healthCheck;
+    try {
+      healthCheck = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Ollama connection timeout. Make sure Ollama is running: ollama serve`);
+      }
+      throw new Error(`Ollama is not accessible at ${OLLAMA_BASE_URL}. Make sure Ollama is running: ollama serve`);
+    }
+    
     if (!healthCheck || !healthCheck.ok) {
       throw new Error(`Ollama is not accessible at ${OLLAMA_BASE_URL}. Make sure Ollama is running: ollama serve`);
     }
@@ -68,16 +84,31 @@ async function callOllama(request: OllamaChatRequest, retries = 3): Promise<stri
 
     logger.info(`Calling Ollama API with model: ${request.model} (attempt ${4 - retries}/3)`);
     
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ...request,
-        stream: false,
-      }),
-    });
+    // Add timeout to the actual API call
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for AI calls
+    
+    let response;
+    try {
+      response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...request,
+          stream: false,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Ollama API call timed out after 2 minutes. The model might be too slow or overloaded.`);
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -176,7 +207,7 @@ Be thorough and extract all visible transactions. Return ONLY valid JSON, no mar
       options: {
         temperature: 0.3,
         num_predict: 2048, // Limit output length to prevent memory issues
-      },
+      } as any, // Ollama options format
     });
 
     // Extract JSON from markdown code blocks if present

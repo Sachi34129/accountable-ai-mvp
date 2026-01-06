@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config(); // Ensure .env is loaded
+
 import { Worker } from 'bullmq';
 import Redis from 'ioredis';
 import { categorizeTransactions } from '../services/categorization.js';
@@ -47,6 +50,12 @@ worker.on('error', (err) => {
 });
 
 logger.info('Categorization worker started');
+logger.info(`USE_OLLAMA: ${process.env.USE_OLLAMA || 'false'}`);
+if (process.env.USE_OLLAMA === 'true') {
+  logger.info('🤖 Ollama mode enabled - using local models');
+} else {
+  logger.info('🌐 OpenAI mode enabled - using OpenAI API');
+}
 
 // Keep process alive
 process.on('SIGTERM', async () => {
