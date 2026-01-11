@@ -1,22 +1,68 @@
-import { Queue, Worker, QueueEvents } from 'bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import Redis from 'ioredis';
 import { logger } from '../utils/logger.js';
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  maxRetriesPerRequest: null,
-});
+/**
+ * Railway deploy note:
+ * - Our core MVP works without Redis (we do in-process extraction for the main flows).
+ * - Some legacy endpoints/workers use BullMQ. We make Redis lazy/optional so the API server can boot
+ *   even when REDIS_URL is not configured.
+ */
 
-// Extraction queue
-export const extractionQueue = new Queue('extraction', { connection });
+let connection: Redis | null = null;
+let extractionQueue: Queue | null = null;
+let categorizationQueue: Queue | null = null;
+let extractionQueueEvents: QueueEvents | null = null;
+let categorizationQueueEvents: QueueEvents | null = null;
+let listenersAttached = false;
 
-// Categorization queue
-export const categorizationQueue = new Queue('categorization', { connection });
+function requireRedisUrl(): string {
+  const url = process.env.REDIS_URL;
+  if (!url) {
+    throw new Error('REDIS_URL is not set. Add a Redis plugin on Railway and set REDIS_URL, or disable queue-based endpoints.');
+  }
+  return url;
+}
 
-// Queue events for monitoring
-export const extractionQueueEvents = new QueueEvents('extraction', { connection });
-export const categorizationQueueEvents = new QueueEvents('categorization', { connection });
+function getConnection(): Redis {
+  if (connection) return connection;
+  connection = new Redis(requireRedisUrl(), { maxRetriesPerRequest: null });
+  return connection;
+}
+
+function attachListenersOnce() {
+  if (listenersAttached) return;
+  listenersAttached = true;
+
+  extractionQueueEvents?.on('completed', ({ jobId }) => {
+    logger.info(`Extraction job ${jobId} completed`);
+  });
+
+  extractionQueueEvents?.on('failed', ({ jobId, failedReason }) => {
+    logger.error(`Extraction job ${jobId} failed: ${failedReason}`);
+  });
+
+  categorizationQueueEvents?.on('completed', ({ jobId }) => {
+    logger.info(`Categorization job ${jobId} completed`);
+  });
+
+  categorizationQueueEvents?.on('failed', ({ jobId, failedReason }) => {
+    logger.error(`Categorization job ${jobId} failed: ${failedReason}`);
+  });
+}
+
+function ensureQueues() {
+  if (extractionQueue && categorizationQueue) return;
+  const conn = getConnection();
+  extractionQueue = new Queue('extraction', { connection: conn });
+  categorizationQueue = new Queue('categorization', { connection: conn });
+  extractionQueueEvents = new QueueEvents('extraction', { connection: conn });
+  categorizationQueueEvents = new QueueEvents('categorization', { connection: conn });
+  attachListenersOnce();
+}
 
 export async function enqueueExtraction(documentId: string, s3Url: string, userId: string) {
+  ensureQueues();
   await extractionQueue.add(
     'extract-document',
     {
@@ -36,6 +82,7 @@ export async function enqueueExtraction(documentId: string, s3Url: string, userI
 }
 
 export async function enqueueCategorization(transactionIds: string[], userId: string) {
+  ensureQueues();
   await categorizationQueue.add(
     'categorize-transactions',
     {
@@ -52,21 +99,4 @@ export async function enqueueCategorization(transactionIds: string[], userId: st
   );
   logger.info(`Categorization job enqueued for ${transactionIds.length} transactions`);
 }
-
-// Queue event listeners
-extractionQueueEvents.on('completed', ({ jobId }) => {
-  logger.info(`Extraction job ${jobId} completed`);
-});
-
-extractionQueueEvents.on('failed', ({ jobId, failedReason }) => {
-  logger.error(`Extraction job ${jobId} failed: ${failedReason}`);
-});
-
-categorizationQueueEvents.on('completed', ({ jobId }) => {
-  logger.info(`Categorization job ${jobId} completed`);
-});
-
-categorizationQueueEvents.on('failed', ({ jobId, failedReason }) => {
-  logger.error(`Categorization job ${jobId} failed: ${failedReason}`);
-});
 
