@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { uploadToS3 } from '../services/storage.js';
 import { prisma } from '../db/prisma.js';
+import { Prisma } from '@prisma/client';
 import { resolveEntityForUser } from '../services/accounting/entity.js';
 import { parseCsvStrict } from '../services/accounting/csv.js';
 import { normalizeRawTransaction } from '../services/accounting/normalize.js';
@@ -159,10 +160,10 @@ router.post('/documents/upload', authenticate, upload.single('file'), async (req
           direction,
           rawDescription,
           referenceId: undefined,
-          rawJson: {
-            extracted: tx,
-            metadata: extracted.metadata,
-          },
+          rawJson: Prisma.validator<Prisma.InputJsonValue>()({
+            extracted: tx as any,
+            metadata: (extracted?.metadata || null) as any,
+          }),
         },
       });
       createdRawIds.push(raw.id);
