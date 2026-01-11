@@ -41,15 +41,23 @@ router.get('/health', async (req, res) => {
   }
 
   // Check Redis
-  try {
-    const Redis = (await import('ioredis')).default;
-    const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-    await redis.ping();
-    await redis.quit();
-    health.services.redis = 'connected';
-  } catch (error) {
-    health.services.redis = 'disconnected';
-    health.status = 'degraded';
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) {
+    // In production we don't want to silently attempt localhost. Redis is optional for the MVP.
+    health.services.redis = 'not_configured';
+  } else {
+    try {
+      const Redis = (await import('ioredis')).default;
+      // Use lazyConnect to avoid background reconnect loops if Redis is down.
+      const redis = new Redis(redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false });
+      await redis.connect();
+      await redis.ping();
+      await redis.quit();
+      health.services.redis = 'connected';
+    } catch (error) {
+      health.services.redis = 'disconnected';
+      health.status = 'degraded';
+    }
   }
 
   const statusCode = health.status === 'ok' ? 200 : 503;
