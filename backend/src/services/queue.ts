@@ -51,18 +51,21 @@ function attachListenersOnce() {
   });
 }
 
-function ensureQueues() {
-  if (extractionQueue && categorizationQueue) return;
+function ensureQueues(): { extractionQueue: Queue; categorizationQueue: Queue } {
+  if (extractionQueue && categorizationQueue) {
+    return { extractionQueue, categorizationQueue };
+  }
   const conn = getConnection();
   extractionQueue = new Queue('extraction', { connection: conn });
   categorizationQueue = new Queue('categorization', { connection: conn });
   extractionQueueEvents = new QueueEvents('extraction', { connection: conn });
   categorizationQueueEvents = new QueueEvents('categorization', { connection: conn });
   attachListenersOnce();
+  return { extractionQueue, categorizationQueue };
 }
 
 export async function enqueueExtraction(documentId: string, s3Url: string, userId: string) {
-  ensureQueues();
+  const { extractionQueue } = ensureQueues();
   await extractionQueue.add(
     'extract-document',
     {
@@ -82,7 +85,7 @@ export async function enqueueExtraction(documentId: string, s3Url: string, userI
 }
 
 export async function enqueueCategorization(transactionIds: string[], userId: string) {
-  ensureQueues();
+  const { categorizationQueue } = ensureQueues();
   await categorizationQueue.add(
     'categorize-transactions',
     {
