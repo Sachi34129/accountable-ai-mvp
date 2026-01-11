@@ -26,6 +26,8 @@ model User {
   Reports       Report[]
   Sessions      Session[]
   Entities      Entity[]
+  TaxDocuments  TaxDocument[]
+  ItrComputationRuns ITRComputationRun[]
 
   @@index([email])
 }
