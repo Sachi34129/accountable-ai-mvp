@@ -1,0 +1,27 @@
+**/node_modules
+**/.next
+**/dist
+**/build
+**/.turbo
+**/.cache
+**/.vite
+**/.eslintcache
+**/*.tsbuildinfo
+
+# Local runtime data / uploads / logs
+backend/uploads
+backend/logs
+**/*.log
+**/*.db
+
+# Secrets / local env
+**/.env
+**/.env.*
+
+# Tooling / editor
+.git
+.gitignore
+.cursor
+.DS_Store
+
+
