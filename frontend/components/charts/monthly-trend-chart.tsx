@@ -48,7 +48,7 @@ export function MonthlyTrendChart() {
                 tickFormatter={(value) => `₹${(value / 1000).toFixed(0)}k`}
               />
               <Tooltip
-                formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, ""]}
+                formatter={(value?: number) => [`₹${Number(value || 0).toLocaleString("en-IN")}`, ""]}
                 contentStyle={{
                   backgroundColor: "var(--color-card)",
                   border: "1px solid var(--color-border)",

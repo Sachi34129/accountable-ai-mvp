@@ -55,7 +55,7 @@ export function SpendingChart() {
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => [`₹${value.toLocaleString("en-IN")}`, "Amount"]}
+                formatter={(value?: number) => [`₹${Number(value || 0).toLocaleString("en-IN")}`, "Amount"]}
                 contentStyle={{
                   backgroundColor: "var(--color-card)",
                   border: "1px solid var(--color-border)",

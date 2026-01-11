@@ -96,13 +96,6 @@ export function DocumentVault({ compact = false }: DocumentVaultProps) {
     [addDocument, updateDocumentStatus, fetchDocuments, fetchTransactions],
   )
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (files) {
-      Array.from(files).forEach(processFile)
-    }
-  }
-
   const getDocumentType = (filename: string): Document["type"] => {
     const lower = filename.toLowerCase()
     if (lower.includes("bank") || lower.includes("statement")) return "bank_statement"
@@ -201,9 +194,7 @@ export function DocumentVault({ compact = false }: DocumentVaultProps) {
                   <div className="flex items-center gap-2">
                     {getStatusIcon(doc.status)}
                     <Badge
-                      variant={
-                        doc.status === "processed" || doc.status === "completed" ? "default" : doc.status === "error" || doc.status === "failed" ? "destructive" : "secondary"
-                      }
+                      variant={doc.status === "processed" ? "default" : doc.status === "error" ? "destructive" : "secondary"}
                       className="text-xs capitalize"
                     >
                       {doc.status}

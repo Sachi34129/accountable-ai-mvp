@@ -1,11 +1,13 @@
-'use client'
+export type ThemeProviderProps = {
+  children: React.ReactNode;
+};
 
-import * as React from 'react'
-import {
-  ThemeProvider as NextThemesProvider,
-  type ThemeProviderProps,
-} from 'next-themes'
-
-export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>
+/**
+ * Vite build of this project does not depend on `next-themes`.
+ * This is a lightweight no-op provider that keeps shadcn-style imports compiling.
+ *
+ * If you later want full theme switching, we can implement it without Next.js deps.
+ */
+export function ThemeProvider({ children }: ThemeProviderProps) {
+  return <>{children}</>;
 }
