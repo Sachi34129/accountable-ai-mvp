@@ -18,17 +18,9 @@ if %ERRORLEVEL% neq 0 (
     exit /b 1
 )
 
-:: Check if services are running (Basic check)
+:: Basic check
 echo [INFO] Checking for essential services...
-
-:: Note: Check if Ollama is responsive
-curl -s http://localhost:11434/api/tags >nul
-if %ERRORLEVEL% neq 0 (
-    echo [WARNING] Ollama is not responsive at http://localhost:11434
-    echo Please run 'ollama serve' in another terminal.
-) else (
-    echo [OK] Ollama is running.
-)
+echo [INFO] Note: local model server checks are disabled (API-only AI).
 
 :: Start Backend Server
 echo [INFO] Starting Backend Server...
@@ -42,3 +34,5 @@ echo [SUCCESS] Startup commands issued.
 echo Monitor the new terminal windows for logs.
 echo API Health Check: http://localhost:3000/api/health
 pause
+
+

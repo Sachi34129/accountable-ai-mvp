@@ -4,36 +4,11 @@ dotenv.config(); // Load .env at the very top
 import OpenAI from 'openai';
 import { logger } from '../utils/logger.js';
 import type { ExtractionResult, TransactionData, CategorizationResult, TaxOpportunity, Insight } from '../types/index.js';
-import * as ollama from './ollama.js';
 
-// Check if we should use Ollama (local) or OpenAI
-// This is evaluated at module load time, so we need to ensure dotenv is loaded first
-// Force re-evaluation to ensure we get the latest env value
-function getUseOllama(): boolean {
-  const value = process.env.USE_OLLAMA;
-  const isTrue = value === 'true' || value === 'True' || value === 'TRUE';
-  logger.info(`[DEBUG] USE_OLLAMA env value: "${value}", type: ${typeof value}, isTrue: ${isTrue}`);
-  return isTrue;
-}
+// Legacy provider file. The app now uses Gemini for LLM tasks and OCR.Space for OCR.
+logger.info('ℹ️ openai.ts loaded (legacy). Current LLM provider: Gemini');
 
-const USE_OLLAMA = getUseOllama();
-
-// Log which mode we're using (this runs when module is loaded)
-if (USE_OLLAMA) {
-  logger.info('🤖 Using Ollama for AI processing (local models)');
-  logger.info(`   Ollama URL: ${process.env.OLLAMA_BASE_URL || 'http://localhost:11434'}`);
-  logger.info(`   Vision Model: ${process.env.OLLAMA_VISION_MODEL || 'llava:latest'}`);
-  logger.info(`   Text Model: ${process.env.OLLAMA_TEXT_MODEL || 'llama3:latest'}`);
-} else {
-  logger.info('🌐 Using OpenAI API for AI processing');
-  logger.warn(`[WARNING] USE_OLLAMA is not 'true'. Current value: "${process.env.USE_OLLAMA}"`);
-}
-
-// Initialize OpenAI client only if API key is provided and not using Ollama
 const getOpenAIClient = () => {
-  if (USE_OLLAMA) {
-    throw new Error('Ollama mode is enabled. OpenAI client should not be used.');
-  }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey === 'your_openai_api_key') {
     throw new Error('OPENAI_API_KEY is not set. Please add your OpenAI API key to .env file');
@@ -45,95 +20,94 @@ export async function extractFromDocument(
   imageUrl: string,
   mimeType: string
 ): Promise<ExtractionResult> {
-  // Re-check USE_OLLAMA at runtime to ensure we have latest value
-  const useOllama = process.env.USE_OLLAMA === 'true';
-  logger.info(`[DEBUG] extractFromDocument called, USE_OLLAMA check: ${useOllama}, env value: "${process.env.USE_OLLAMA}"`);
-  
-  // Use Ollama if enabled
-  if (useOllama) {
-    logger.info('✅ Using Ollama for document extraction');
-    return ollama.extractFromDocument(imageUrl, mimeType);
-  }
-  
-  logger.warn('⚠️  Falling back to OpenAI (USE_OLLAMA is not true)');
+  const openai = getOpenAIClient();
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `Extract all financial transactions from this document.\n\nReturn ONLY valid JSON with this structure:\n{\n  \"transactions\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"amount\": number,\n      \"currency\": \"INR\",\n      \"description\": \"string\",\n      \"merchant\": \"string (optional)\",\n      \"direction\": \"income\" | \"expense\",\n      \"category\": \"string (optional)\",\n      \"subCategory\": \"string (optional)\",\n      \"isRecurring\": boolean,\n      \"labels\": [\"string\"],\n      \"confidence\": number (0-1)\n    }\n  ],\n  \"metadata\": {\n    \"documentType\": \"receipt\" | \"invoice\" | \"statement\" | \"other\",\n    \"extractedAt\": \"ISO timestamp\",\n    \"confidence\": number (0-1),\n    \"model\": \"gpt-4o\",\n    \"version\": \"1.0\"\n  }\n}`,
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageUrl.startsWith('data:') ? imageUrl : `data:${mimeType};base64,${imageUrl}`,
+            },
+          },
+        ],
+      },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.2,
+    max_tokens: 4000,
+  });
 
-  try {
-    const openai = getOpenAIClient();
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o', // Updated to current vision model
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Extract all financial transactions from this document. Return a JSON object with this structure:
-{
-  "transactions": [
-    {
-      "date": "YYYY-MM-DD",
-      "amount": number,
-      "currency": "INR",
-      "description": "string",
-      "merchant": "string (optional)",
-      "direction": "income" | "expense",
-      "category": "string (optional)",
-      "subCategory": "string (optional)",
-      "isRecurring": boolean,
-      "labels": ["string"],
-      "confidence": number (0-1)
-    }
-  ],
-  "metadata": {
-    "documentType": "receipt" | "invoice" | "statement" | "other",
-    "extractedAt": "ISO timestamp",
-    "confidence": number (0-1),
-    "model": "gpt-4o",
-    "version": "1.0"
-  }
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error('No content returned from OpenAI');
+  return JSON.parse(content) as ExtractionResult;
 }
 
-Be thorough and extract all visible transactions.`,
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageUrl.startsWith('data:') ? imageUrl : `data:${mimeType};base64,${imageUrl}`,
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 4000,
-    });
+export async function ocrImageToText(params: { base64: string; mimeType: string }): Promise<string> {
+  const { base64, mimeType } = params;
+  const dataUrl = `data:${mimeType};base64,${base64}`;
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No content returned from OpenAI');
-    }
+  const openai = getOpenAIClient();
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: `You are an OCR engine. Extract all readable text from the document image.\n\nReturn ONLY plain text. Preserve line breaks. Do not add commentary.`,
+          },
+          {
+            type: 'image_url',
+            image_url: { url: dataUrl },
+          },
+        ],
+      },
+    ],
+    max_tokens: 4000,
+  });
 
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/) || content.match(/(\{[\s\S]*\})/);
-    const jsonStr = jsonMatch ? jsonMatch[1] : content;
-    const result = JSON.parse(jsonStr) as ExtractionResult;
+  const text = response.choices[0]?.message?.content;
+  if (!text) throw new Error('No OCR text returned from OpenAI');
+  return text.trim();
+}
 
-    return result;
-  } catch (error) {
-    logger.error('Error extracting from document:', error);
-    throw error;
-  }
+export async function extractTransactionsFromText(params: {
+  text: string;
+  sourceHint?: string;
+}): Promise<ExtractionResult> {
+  const { text, sourceHint } = params;
+  const openai = getOpenAIClient();
+
+  const prompt = `Extract all financial transactions from the following text${
+    sourceHint ? ` (source: ${sourceHint})` : ''
+  }.\n\nRules:\n- Return ONLY valid JSON.\n- Dates must be ISO format YYYY-MM-DD.\n- Amount must be a number (no commas).\n- direction must be \"income\" or \"expense\".\n\nReturn a JSON object with this structure:\n{\n  \"transactions\": [\n    {\n      \"date\": \"YYYY-MM-DD\",\n      \"amount\": number,\n      \"currency\": \"INR\",\n      \"description\": \"string\",\n      \"merchant\": \"string (optional)\",\n      \"direction\": \"income\" | \"expense\",\n      \"category\": \"string (optional)\",\n      \"subCategory\": \"string (optional)\",\n      \"isRecurring\": boolean,\n      \"labels\": [\"string\"],\n      \"confidence\": number (0-1)\n    }\n  ],\n  \"metadata\": {\n    \"documentType\": \"receipt\" | \"invoice\" | \"statement\" | \"other\",\n    \"extractedAt\": \"ISO timestamp\",\n    \"confidence\": number (0-1),\n    \"model\": \"gpt-4o\",\n    \"version\": \"1.0\"\n  }\n}\n\nTEXT:\n${text}`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: prompt }],
+    response_format: { type: 'json_object' },
+    temperature: 0.2,
+    max_tokens: 4000,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error('No content returned from OpenAI');
+  return JSON.parse(content) as ExtractionResult;
 }
 
 export async function categorizeTransaction(
   transaction: TransactionData,
   userPersona?: string
 ): Promise<CategorizationResult> {
-  // Re-check at runtime
-  if (process.env.USE_OLLAMA === 'true') {
-    logger.info('✅ Using Ollama for transaction categorization');
-    return ollama.categorizeTransaction(transaction, userPersona);
-  }
-
   try {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
@@ -190,12 +164,6 @@ export async function detectTaxOpportunities(
   transactions: TransactionData[],
   assessmentYear: string
 ): Promise<TaxOpportunity[]> {
-  // Re-check at runtime
-  if (process.env.USE_OLLAMA === 'true') {
-    logger.info('✅ Using Ollama for tax opportunity detection');
-    return ollama.detectTaxOpportunities(transactions, assessmentYear);
-  }
-
   try {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
@@ -261,12 +229,6 @@ export async function generateInsights(
   period: string,
   userPersona?: string
 ): Promise<Insight[]> {
-  // Re-check at runtime
-  if (process.env.USE_OLLAMA === 'true') {
-    logger.info('✅ Using Ollama for insights generation');
-    return ollama.generateInsights(transactions, period, userPersona);
-  }
-
   try {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
@@ -329,12 +291,6 @@ export async function chatWithFinances(
     taxNotes?: TaxOpportunity[];
   }
 ): Promise<string> {
-  // Re-check at runtime
-  if (process.env.USE_OLLAMA === 'true') {
-    logger.info('✅ Using Ollama for chat');
-    return ollama.chatWithFinances(message, context);
-  }
-
   try {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({
@@ -369,12 +325,6 @@ export async function generateDisputeEmail(
   transaction: TransactionData,
   reason?: string
 ): Promise<{ subject: string; body: string; recipient?: string }> {
-  // Re-check at runtime
-  if (process.env.USE_OLLAMA === 'true') {
-    logger.info('✅ Using Ollama for dispute email generation');
-    return ollama.generateDisputeEmail(transaction, reason);
-  }
-
   try {
     const openai = getOpenAIClient();
     const response = await openai.chat.completions.create({

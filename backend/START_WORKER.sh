@@ -16,30 +16,13 @@ fi
 # Check configuration
 echo ""
 echo "Configuration:"
-echo "  USE_OLLAMA: ${USE_OLLAMA:-false}"
-echo "  OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434}"
-echo "  OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-llava:latest}"
-echo "  OLLAMA_TEXT_MODEL: ${OLLAMA_TEXT_MODEL:-llama3:latest}"
 echo "  REDIS_URL: ${REDIS_URL:-redis://localhost:6379}"
+echo "  AI_PROVIDER: OpenAI API"
 echo ""
 
-# Check if USE_OLLAMA is set
-if [ "$USE_OLLAMA" = "true" ]; then
-  echo "🤖 Ollama mode: ENABLED"
-  
-  # Check if Ollama is running
-  if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
-    echo "✅ Ollama is running"
-  else
-    echo "❌ ERROR: Ollama is not running!"
-    echo "   Start Ollama: ollama serve"
-    exit 1
-  fi
-else
-  echo "🌐 OpenAI mode: ENABLED"
+# Check OpenAI key
   if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key" ]; then
     echo "⚠️  Warning: OPENAI_API_KEY is not set or is placeholder"
-  fi
 fi
 
 # Check if Redis is running

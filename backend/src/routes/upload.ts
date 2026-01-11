@@ -5,7 +5,7 @@ import { validate } from '../middleware/validator.js';
 import { uploadSchema } from '../utils/schemas.js';
 import { uploadLimiter } from '../middleware/rateLimiter.js';
 import { uploadToS3 } from '../services/storage.js';
-import { enqueueExtraction } from '../services/queue.js';
+import { extractDocument } from '../services/extraction.js';
 import { prisma } from '../db/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { logger } from '../utils/logger.js';
@@ -14,7 +14,7 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB
+    fileSize: 1 * 1024 * 1024, // 1MB
   },
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
@@ -64,19 +64,22 @@ router.post(
           type: type || 'unknown',
           sourceUri: localUrl,
           mimeType: req.file.mimetype,
-          extractionStatus: 'pending',
+          extractionStatus: 'processing',
+          extractionProgress: 5,
         },
       });
 
-      // Enqueue extraction job
-      await enqueueExtraction(document.id, localUrl, req.userId);
+      // Kick off extraction in-process (avoids "pending forever" if worker/Redis isn't running)
+      void extractDocument(document.id, localUrl, req.userId).catch((err) => {
+        logger.error(`Async extraction failed for document ${document.id}:`, err);
+      });
 
       logger.info(`Document uploaded: ${document.id} by user ${req.userId}`);
 
       res.status(201).json({
         documentId: document.id,
         status: 'uploaded',
-        extractionStatus: 'pending',
+        extractionStatus: 'processing',
       });
     } catch (error) {
       next(error);

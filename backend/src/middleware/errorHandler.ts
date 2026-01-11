@@ -18,6 +18,15 @@ export function errorHandler(
   res: Response,
   next: NextFunction
 ) {
+  // Multer upload errors (e.g., file too large)
+  const anyErr = err as any;
+  if (anyErr && anyErr.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({
+      error: 'File too large. Max upload size is 1MB.',
+      statusCode: 413,
+    });
+  }
+
   if (err instanceof AppError) {
     logger.warn(`Operational error: ${err.message}`, {
       statusCode: err.statusCode,

@@ -10,15 +10,223 @@ generator client {
 model User {
   id            String       @id @default(cuid())
   email         String       @unique
+  name          String?
+  pan           String?
+  phone         String?      @unique
+  role          String?
   persona       String
+  onboardingCompleted Boolean @default(false)
+  googleSub      String?      @unique
+  passwordHash   String?
   createdAt     DateTime     @default(now())
   Documents     Document[]
   Transactions  Transaction[]
   TaxNotes      TaxNote[]
   Insights      Insight[]
   Reports       Report[]
+  Sessions      Session[]
+  Entities      Entity[]
 
   @@index([email])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Accounting (CA-grade) models
+model Entity {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Gstins    EntityGstin[]
+  UploadedFiles UploadedFile[]
+  RawTransactions RawTransaction[]
+  NormalizedTransactions NormalizedTransaction[]
+  TransactionCategorizations TransactionCategorization[]
+  CategorizationRules CategorizationRule[]
+  UserOverrideRules UserOverrideRule[]
+  AuditLogs AuditLog[]
+
+  @@index([userId])
+  @@index([userId, isDefault])
+}
+
+model EntityGstin {
+  id        String   @id @default(cuid())
+  entityId  String
+  gstin     String
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  Entity    Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@unique([entityId, gstin])
+}
+
+model UploadedFile {
+  id            String   @id @default(cuid())
+  entityId      String
+  sourceType    String   // bank|upi|card|cash
+  originalName  String
+  mimeType      String
+  sizeBytes     Int
+  sha256        String
+  storageUri    String
+  status        String   @default("staged") // staged|committed|rejected
+  committedAt   DateTime?
+  uploadedAt    DateTime @default(now())
+
+  Entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  RawTransactions RawTransaction[]
+
+  @@index([entityId])
+  @@index([uploadedAt])
+  @@unique([entityId, sha256])
+}
+
+model RawTransaction {
+  id              String   @id @default(cuid())
+  entityId        String
+  uploadedFileId  String?
+  sourceType      String   // bank|upi|card|cash
+  transactionDate DateTime
+  amount          Float
+  direction       String   // inflow|outflow
+  rawDescription  String
+  referenceId     String?
+  rawJson         Json
+  createdAt       DateTime @default(now())
+
+  Entity          Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  UploadedFile    UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: SetNull)
+  Normalized      NormalizedTransaction?
+
+  @@index([entityId])
+  @@index([uploadedFileId])
+  @@index([transactionDate])
+  @@index([referenceId])
+}
+
+model NormalizedTransaction {
+  id                    String   @id @default(cuid())
+  entityId              String
+  rawTransactionId       String   @unique
+  date                  DateTime
+  amount                Float
+  direction             String   // inflow|outflow
+  descriptionClean      String
+  referenceExtracted    String?
+  timezone              String
+  normalizationVersion  String
+  normalizationDiffJson Json
+  createdAt             DateTime @default(now())
+
+  Entity                Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  RawTransaction         RawTransaction @relation(fields: [rawTransactionId], references: [id], onDelete: Cascade)
+  Categorization        TransactionCategorization?
+
+  @@index([entityId])
+  @@index([date])
+}
+
+model Category {
+  id          String @id @default(cuid())
+  code        String @unique
+  name        String
+  ledgerType  String // asset|liability|income|expense|equity
+
+  TransactionCategorizations TransactionCategorization[]
+  CategorizationRules CategorizationRule[]
+  UserOverrideRules UserOverrideRule[]
+}
+
+model TransactionCategorization {
+  id                     String   @id @default(cuid())
+  entityId               String
+  normalizedTransactionId String   @unique
+  categoryId             String?
+  method                 String   // manual|rule|history|ai|uncategorized
+  confidence             Float
+  explanation            String
+  status                 String   // confirmed|needs_review
+  decidedAt              DateTime @default(now())
+
+  Entity                 Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  NormalizedTransaction  NormalizedTransaction @relation(fields: [normalizedTransactionId], references: [id], onDelete: Cascade)
+  Category               Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([entityId])
+  @@index([status])
+  @@index([decidedAt])
+}
+
+model CategorizationRule {
+  id          String   @id @default(cuid())
+  entityId    String
+  name        String
+  enabled     Boolean  @default(true)
+  priority    Int      @default(100)
+  matchers    Json     // deterministic match configuration
+  categoryId  String
+  explanationTemplate String
+  createdAt   DateTime @default(now())
+
+  Entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  Category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([entityId])
+  @@index([enabled])
+  @@index([priority])
+}
+
+model UserOverrideRule {
+  id          String   @id @default(cuid())
+  entityId    String
+  createdByUserId String
+  enabled     Boolean  @default(true)
+  matchers    Json
+  categoryId  String
+  createdAt   DateTime @default(now())
+
+  Entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  Category    Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([entityId])
+  @@index([createdByUserId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  entityId    String
+  actorUserId String
+  action      String
+  targetType  String
+  targetId    String
+  reason      String
+  beforeJson  Json?
+  afterJson   Json?
+  createdAt   DateTime @default(now())
+
+  Entity      Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
+  @@index([actorUserId])
+  @@index([createdAt])
 }
 
 model Document {
@@ -82,6 +290,112 @@ model TaxNote {
 
   @@index([userId])
   @@index([assessmentYear])
+}
+
+// Tax compliance (deterministic) — v1: Form 16 → ITR worksheets (no filing)
+model TaxDocument {
+  id           String   @id @default(cuid())
+  userId       String
+  type         String   // FORM16
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  sha256       String
+  storageUri   String
+  status       String   @default("uploaded") // uploaded|extracted|validated|error
+  uploadedAt   DateTime @default(now())
+
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ExtractionRuns TaxExtractionRun[]
+
+  @@index([userId])
+  @@index([uploadedAt])
+  @@unique([userId, sha256])
+}
+
+model TaxExtractionRun {
+  id             String   @id @default(cuid())
+  taxDocumentId  String
+  model          String
+  version        String
+  rawOcrTextHash String
+  extractedJson  Json
+  createdAt      DateTime @default(now())
+
+  TaxDocument    TaxDocument @relation(fields: [taxDocumentId], references: [id], onDelete: Cascade)
+  Fields         TaxField[]
+  Issues         TaxValidationIssue[]
+  ItrRuns        ITRComputationRun[]
+
+  @@index([taxDocumentId])
+  @@index([createdAt])
+}
+
+model TaxField {
+  id                String   @id @default(cuid())
+  extractionRunId   String
+  key               String
+  valueJson         Json
+  sourcePage        Int?
+  sourceTextSnippet String?
+  confidence        Float?
+  createdAt         DateTime @default(now())
+
+  ExtractionRun     TaxExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Cascade)
+
+  @@index([extractionRunId])
+  @@index([key])
+}
+
+model TaxValidationIssue {
+  id              String   @id @default(cuid())
+  extractionRunId String
+  severity        String   // info|warning|error
+  code            String
+  message         String
+  fieldRefsJson   Json?
+  createdAt       DateTime @default(now())
+
+  ExtractionRun   TaxExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Cascade)
+
+  @@index([extractionRunId])
+  @@index([severity])
+  @@index([code])
+}
+
+model ITRComputationRun {
+  id              String   @id @default(cuid())
+  userId          String
+  extractionRunId String
+  assessmentYear  String
+  regime          String   // old|new
+  rulesVersion    String
+  schemaVersion   String
+  computedJson    Json
+  createdAt       DateTime @default(now())
+
+  User            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ExtractionRun   TaxExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Cascade)
+  LineItems       ITRLineItem[]
+
+  @@index([userId])
+  @@index([assessmentYear])
+  @@index([createdAt])
+}
+
+model ITRLineItem {
+  id               String   @id @default(cuid())
+  computationRunId String
+  code             String
+  label            String
+  amount           Float
+  sourceRefsJson   Json
+  createdAt        DateTime @default(now())
+
+  ComputationRun   ITRComputationRun @relation(fields: [computationRunId], references: [id], onDelete: Cascade)
+
+  @@index([computationRunId])
+  @@index([code])
 }
 
 model Insight {

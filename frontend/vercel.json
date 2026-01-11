@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://REPLACE_WITH_YOUR_RAILWAY_BACKEND_DOMAIN/api/$1"
+    }
+  ]
+}
+
+

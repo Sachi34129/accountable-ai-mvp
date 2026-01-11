@@ -17,6 +17,18 @@ export const taxQuerySchema = z.object({
   userId: z.string().optional(), // Injected by auth middleware
 });
 
+export const itrComputeSchema = z.object({
+  assessmentYear: z.string().min(4),
+  regime: z.enum(['old', 'new']),
+  taxDocumentId: z.string().optional(),
+  userId: z.string().optional(), // Injected by auth middleware
+});
+
+export const form16IdParamSchema = z.object({
+  id: z.string(),
+  userId: z.string().optional(),
+});
+
 // Insights schemas
 export const insightsQuerySchema = z.object({
   period: z.string().optional(),
@@ -35,6 +47,17 @@ export const chatSchema = z.object({
   message: z.string().min(1),
   userId: z.string().optional(), // Injected by auth middleware
   conversationId: z.string().optional(),
+});
+
+// Auth schemas
+export const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
 });
 
 // Dispute schemas

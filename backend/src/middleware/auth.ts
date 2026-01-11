@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger.js';
+import { getUserIdFromRequest } from '../services/sessions.js';
 
 // Simple JWT-based auth middleware (can be enhanced with proper JWT verification)
 export interface AuthRequest extends Request {
@@ -22,11 +23,21 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       return;
     }
 
+    // Preferred: httpOnly session cookie (stored in DB)
+    const userIdFromCookie = await getUserIdFromRequest(req);
+    if (userIdFromCookie) {
+      req.userId = userIdFromCookie;
+      next();
+      return;
+    }
+
     // For production: Check Bearer token
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: Missing or invalid token. For testing, use X-User-Id header.' });
+      return res
+        .status(401)
+        .json({ error: 'Unauthorized: Missing auth. Use Google login or email/password login to get a session cookie.' });
     }
 
     const token = authHeader.substring(7);
@@ -41,7 +52,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
     
     // For OAuth flow, the token would come from the OAuth provider
     // For now, extract userId from token (simple format for development)
-    const userId = token; // In production, decode JWT and extract userId
+    const userId = token; // legacy fallback: treat bearer token as raw userId
     
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized: User ID required' });
@@ -71,6 +82,9 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
   if (userId) {
     req.userId = userId;
   }
+
+  // Note: optionalAuth is synchronous; cookie session lookup is async, so we don't do it here.
+  // For endpoints that need auth, use authenticate().
   
   next();
 }

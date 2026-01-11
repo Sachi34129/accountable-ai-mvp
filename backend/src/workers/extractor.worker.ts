@@ -61,12 +61,7 @@ worker.on('error', (err) => {
 });
 
 logger.info('Extraction worker started');
-logger.info(`USE_OLLAMA: ${process.env.USE_OLLAMA || 'false'}`);
-if (process.env.USE_OLLAMA === 'true') {
-  logger.info('🤖 Ollama mode enabled - using local models');
-} else {
-  logger.info('🌐 OpenAI mode enabled - using OpenAI API');
-}
+logger.info('🌐 AI provider: OpenAI API');
 
 // Keep process alive
 process.on('SIGTERM', async () => {

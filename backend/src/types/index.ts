@@ -50,6 +50,30 @@ export interface Insight {
   confidence?: number;
 }
 
+export interface EfficiencyMetric {
+  metric: string;
+  value: number;
+  unit?: string;
+  trend?: string;
+  insight: string;
+}
+
+export interface OnboardingResult {
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    status: 'pending' | 'in_progress' | 'completed';
+    deadline: string | null;
+    responsiblePerson: string | null;
+  }>;
+  complianceCheck: {
+    passed: boolean;
+    findings: string[];
+    recommendations: string[];
+  };
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

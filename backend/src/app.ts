@@ -13,6 +13,11 @@ dotenv.config();
 
 const app = express();
 
+// Behind Railway/Vercel proxies in production
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Security middleware
 app.use(helmet());
 
@@ -34,7 +39,7 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Id', 'X-Entity-Id'],
 }));
 
 // Body parsing

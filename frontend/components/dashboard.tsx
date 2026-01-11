@@ -1,7 +1,5 @@
-"use client"
-
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { FinancialSummary } from "@/components/financial/financial-summary"
 import { DocumentVault } from "@/components/documents/document-vault"
@@ -14,18 +12,18 @@ import { FinancialProvider } from "@/contexts/financial-context"
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState("chat")
   const [isAuthLoading, setIsAuthLoading] = useState(true)
-  const router = useRouter()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const userId = localStorage.getItem("userId")
       if (!userId) {
-        router.push("/login")
+        navigate("/login")
       } else {
         setIsAuthLoading(false)
       }
     }
-  }, [router])
+  }, [navigate])
 
   if (isAuthLoading) {
     return (

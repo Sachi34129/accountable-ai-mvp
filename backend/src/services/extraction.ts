@@ -1,8 +1,9 @@
-import { extractFromDocument } from './openai.js';
+import { extractTransactionsFromTextGemini } from './gemini.js';
 import { getFileFromS3, extractKeyFromS3Url } from './storage.js';
 import { prisma } from '../db/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { ExtractionResult } from '../types/index.js';
+import { ocrSpaceExtractText } from './ocrSpace.js';
 
 export async function extractDocument(documentId: string, fileUrl: string, userId: string) {
   try {
@@ -28,13 +29,11 @@ export async function extractDocument(documentId: string, fileUrl: string, userI
     });
 
     // Convert to base64 for OpenAI Vision API
-    const base64Image = fileBuffer.toString('base64');
     const mimeType = await prisma.document.findUnique({
       where: { id: documentId },
       select: { mimeType: true },
     });
-
-    const dataUrl = `data:${mimeType?.mimeType || 'image/jpeg'};base64,${base64Image}`;
+    const resolvedMimeType = mimeType?.mimeType || 'application/octet-stream';
 
     // Update progress: ready for extraction
     await prisma.document.update({
@@ -42,8 +41,19 @@ export async function extractDocument(documentId: string, fileUrl: string, userI
       data: { extractionProgress: 40 },
     });
 
-    // Extract using AI (Ollama or OpenAI)
-    const result: ExtractionResult = await extractFromDocument(dataUrl, mimeType?.mimeType || 'image/jpeg');
+    // OCR via OCR.Space (works for images and PDFs, including scanned PDFs)
+    const extractedText = await ocrSpaceExtractText({
+      fileBuffer,
+      // give OCR.Space a filename it can use (extension added in ocrSpace.ts as well)
+      filename: `${documentId}`,
+      mimeType: resolvedMimeType,
+    });
+
+    // Parse transactions from extracted text via Gemini (text)
+    const result: ExtractionResult = await extractTransactionsFromTextGemini({
+      text: extractedText,
+      sourceHint: resolvedMimeType,
+    });
 
     // Update progress: extraction complete, creating transactions
     await prisma.document.update({
@@ -75,11 +85,11 @@ export async function extractDocument(documentId: string, fileUrl: string, userI
       )
     );
 
-    // Update document - completed
+    // Update document - completed (frontend expects processed)
     await prisma.document.update({
       where: { id: documentId },
       data: {
-        extractionStatus: 'completed',
+        extractionStatus: 'processed',
         extractionProgress: 100,
         extractedAt: new Date(),
         provenanceModel: result.metadata.model,
@@ -103,13 +113,13 @@ export async function extractDocument(documentId: string, fileUrl: string, userI
       await prisma.document.update({
         where: { id: documentId },
         data: { 
-          extractionStatus: 'failed',
+          extractionStatus: 'error',
           extractionProgress: 0, // Reset progress on failure
         },
       });
-      logger.info(`Updated document ${documentId} status to failed`);
+      logger.info(`Updated document ${documentId} status to error`);
     } catch (updateError) {
-      logger.error(`Failed to update document ${documentId} status to failed:`, updateError);
+      logger.error(`Failed to update document ${documentId} status to error:`, updateError);
       // Continue anyway - the error is already logged
     }
 

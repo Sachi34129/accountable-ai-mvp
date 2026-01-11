@@ -21,6 +21,7 @@ interface DocumentVaultProps {
 export function DocumentVault({ compact = false }: DocumentVaultProps) {
   const { documents, addDocument, updateDocumentStatus, removeDocument, fetchDocuments, fetchTransactions } = useFinancial()
   const [isDragging, setIsDragging] = useState(false)
+  const MAX_FILE_BYTES = 1 * 1024 * 1024
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -33,6 +34,12 @@ export function DocumentVault({ compact = false }: DocumentVaultProps) {
   }, [])
 
   const processFile = async (file: File) => {
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error(`${file.name} is too large`, {
+        description: "Max upload size is 1 MB. Please compress the file and try again.",
+      })
+      return
+    }
     const docId = `temp-${Date.now()}`
     const docType = getDocumentType(file.name)
 

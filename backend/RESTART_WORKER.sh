@@ -18,12 +18,10 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-USE_OLLAMA=$(grep "^USE_OLLAMA=" .env | cut -d '=' -f2)
-echo "   USE_OLLAMA=${USE_OLLAMA}"
-
-if [ "$USE_OLLAMA" != "true" ]; then
-  echo "⚠️  WARNING: USE_OLLAMA is not set to 'true'"
-  echo "   The worker will use OpenAI API instead of Ollama"
+OPENAI_API_KEY=$(grep "^OPENAI_API_KEY=" .env | cut -d '=' -f2)
+if [ -z "$OPENAI_API_KEY" ] || [ "$OPENAI_API_KEY" = "your_openai_api_key" ]; then
+  echo "⚠️  WARNING: OPENAI_API_KEY is not set (or is placeholder)"
+  echo "   The worker will fail AI calls until you set a valid OpenAI API key."
 fi
 
 # Check Redis
@@ -36,22 +34,9 @@ else
   exit 1
 fi
 
-# Check Ollama (if enabled)
-if [ "$USE_OLLAMA" = "true" ]; then
-  echo ""
-  echo "4. Checking Ollama connection..."
-  if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
-    echo "   ✅ Ollama is running"
-  else
-    echo "   ❌ Ollama is NOT running. Start it with: ollama serve"
-    exit 1
-  fi
-fi
-
 # Start the worker
 echo ""
-echo "5. Starting worker..."
-echo "   Watch the logs below for '✅ Using Ollama' messages"
+echo "4. Starting worker..."
 echo "   Press Ctrl+C to stop"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

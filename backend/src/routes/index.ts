@@ -11,6 +11,9 @@ import metricsRouter from './metrics.js';
 import authRouter from './auth.js';
 import documentsRouter from './documents.js';
 import transactionsRouter from './transactions.js';
+import usersRouter from './users.js';
+import accountingRouter from './accounting.js';
+import entitiesRouter from './entities.js';
 
 const router = Router();
 
@@ -23,7 +26,7 @@ router.get('/health', async (req, res) => {
     services: {
       database: 'unknown',
       redis: 'unknown',
-      ollama: 'unknown',
+      ai: 'openai',
     },
   };
 
@@ -49,30 +52,6 @@ router.get('/health', async (req, res) => {
     health.status = 'degraded';
   }
 
-  // Check Ollama (if enabled)
-  if (process.env.USE_OLLAMA === 'true') {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const response = await fetch(
-        `${process.env.OLLAMA_BASE_URL || 'http://localhost:11434'}/api/tags`,
-        { signal: controller.signal }
-      );
-      clearTimeout(timeoutId);
-      if (response.ok) {
-        health.services.ollama = 'running';
-      } else {
-        health.services.ollama = 'error';
-        health.status = 'degraded';
-      }
-    } catch (error) {
-      health.services.ollama = 'not_running';
-      health.status = 'degraded';
-    }
-  } else {
-    health.services.ollama = 'disabled';
-  }
-
   const statusCode = health.status === 'ok' ? 200 : 503;
   res.status(statusCode).json(health);
 });
@@ -88,6 +67,9 @@ router.use('/chat', chatRouter);
 router.use('/dispute', disputeRouter);
 router.use('/metrics', metricsRouter);
 router.use('/auth', authRouter);
+router.use('/users', usersRouter);
+router.use('/entities', entitiesRouter);
+router.use('/accounting', accountingRouter);
 router.use('/documents', documentsRouter);
 router.use('/transactions', transactionsRouter);
 

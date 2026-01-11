@@ -1,17 +1,7 @@
-import { Link } from 'react-router-dom';
-
 function Home() {
-  return (
-    <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h1>Accountable AI</h1>
-      <p>Your AI-powered Virtual Chartered Accountant</p>
-      <div style={{ marginTop: '2rem' }}>
-        <Link to="/login">
-          <button>Get Started</button>
-        </Link>
-      </div>
-    </div>
-  );
+  // New UI lives in the dashboard experience.
+  // This keeps the root route in sync with the new v0 UI that was added under `frontend/components/`.
+  return null
 }
 
 export default Home;

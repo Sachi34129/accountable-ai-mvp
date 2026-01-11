@@ -1,4 +1,5 @@
 import { generateInsights } from './openai.js';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db/prisma.js';
 import { logger } from '../utils/logger.js';
 import type { TransactionData, Insight } from '../types/index.js';
@@ -64,7 +65,7 @@ export async function generateFinancialInsights(
             type: insight.type,
             summary: insight.summary,
             eli5: insight.eli5 || null,
-            data: insight.data || null,
+            data: insight.data ? (insight.data as Prisma.InputJsonValue) : undefined,
             explanation: insight.explanation || null,
             confidence: insight.confidence || null,
           },

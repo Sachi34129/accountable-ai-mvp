@@ -1,14 +1,12 @@
-"use client"
-
 import { Brain, Moon, Sun, Menu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 
 export function Header() {
   const [isDark, setIsDark] = useState(true)
-  const router = useRouter()
+  const navigate = useNavigate()
 
   const toggleTheme = () => {
     setIsDark(!isDark)
@@ -17,7 +15,7 @@ export function Header() {
 
   const handleLogout = () => {
     localStorage.removeItem("userId")
-    router.push("/login")
+    navigate("/login")
   }
 
   return (
@@ -50,7 +48,7 @@ export function Header() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => router.push('/')}>Dashboard</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/')}>Dashboard</DropdownMenuItem>
               <DropdownMenuItem>Settings</DropdownMenuItem>
               <DropdownMenuItem>Help</DropdownMenuItem>
               <DropdownMenuSeparator />
