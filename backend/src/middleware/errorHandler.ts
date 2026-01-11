@@ -40,6 +40,24 @@ export function errorHandler(
     });
   }
 
+  // Common upstream/service failures -> map to useful HTTP statuses (instead of generic 500)
+  const msg = String((err as any)?.message || '');
+  if (msg.includes('Gemini API error: 429') || msg.includes('"status": "RESOURCE_EXHAUSTED"') || msg.includes('RESOURCE_EXHAUSTED')) {
+    return res.status(429).json({
+      error: 'Gemini rate limit/quota exceeded. Please retry in a minute or use a higher-quota API key.',
+      statusCode: 429,
+      ...(process.env.NODE_ENV === 'development' && { details: msg }),
+    });
+  }
+
+  if (msg.includes('OCR.Space processing failed') || msg.includes('OCR.Space error:')) {
+    return res.status(422).json({
+      error: 'OCR failed to read this document. Try a clearer scan/photo or a different file.',
+      statusCode: 422,
+      ...(process.env.NODE_ENV === 'development' && { details: msg }),
+    });
+  }
+
   // Unexpected errors
   logger.error('Unexpected error:', {
     error: err,
