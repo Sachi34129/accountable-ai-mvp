@@ -12,7 +12,10 @@
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "build:backend": "cd backend && npm run build",
     "build:frontend": "cd frontend && npm run build",
-    "build": "npm run build:backend && npm run build:frontend"
+    "build": "npm run build:backend && npm run build:frontend",
+    "start": "npm run -w backend railway:start",
+    "railway:build": "npm run -w backend build",
+    "railway:start": "npm run -w backend railway:start"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
